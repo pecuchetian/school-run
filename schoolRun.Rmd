@@ -1,0 +1,126 @@
+---
+title: "School Run l'Esculapi"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(tidygeocoder)
+library(stringr)
+library(leaflet)
+library(osmdata)
+library(sf)
+#library(ggmap)
+
+
+## First, we clean the working memory
+
+#rm(list = ls())
+
+
+## Second, set working directory
+
+setwd("~/Yandex.Disk/UOC/SIDE-PROJS/SHCOOLRUN/")
+```
+
+## Adreces
+Llegim les adreces del csv
+
+
+```{r}
+df <- read.csv("Adreces.csv",stringsAsFactors = FALSE)
+adresses <- df %>%
+  filter(Codi.postal=="17130" && Municipi.de.residència=="L'Escala" ) %>%
+ mutate(via = str_replace_all(Tipus.de.via, c("CR"="Carrer","AV" ="Avinguda", "PG"= "Passatge","PL"="Plaça","CM"="Camí") )) %>%
+  select(c(Nom.via,Porta,Municipi.de.residència,Codi.postal)) %>%
+  mutate(sep_1=",",.before=Municipi.de.residència)%>%
+  mutate(sep_2=", Alt Empordà, Girona, ",.after=Municipi.de.residència)%>%
+  unite(col="address",sep=" ") 
+#AFEGIM la de l'escola
+
+adresses <- adresses %>%
+  add_row(address = "Carrer Teranyina 8, L'Escala, 17130")
+
+```
+
+```{r}
+adresses
+```
+
+
+## Geocoding
+
+```{r}
+
+
+coordinates <- adresses %>%
+  tidygeocoder::geocode(address,timeout= 5)
+ 
+
+```
+
+
+
+```{r}
+
+coordinates  <- 
+  coordinates %>%
+  filter(long>3.1)
+  drop_na
+
+escola <- coordinates[nrow(coordinates),]
+coordinates <- coordinates[1:nrow(coordinates),]
+coordinates
+```
+
+```{r}
+icon <- makeIcon(iconUrl="pupil_icon.png",iconWidth = 28,iconHeight = 28)
+sc_icon <-  makeIcon(iconUrl="school-icon.png",iconWidth = 35,iconHeight = 35)
+m <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addMarkers(lng=coordinates$long, lat=coordinates$lat, popup=coordinates$address,icon=icon)%>%
+  addMarkers(lng=escola$long, lat= escola$lat, icon = sc_icon)
+m
+
+```
+
+
+
+### Maybe explore the graph way. Download ways and points,nodes and vertices and find shortest path.
+
+```{r}
+available_features()
+```
+```{r}
+available_tags("route")
+```
+
+
+
+```{r}
+
+#building the query
+q <- getbb("L'Escala") %>%
+      opq()  %>%
+       add_osm_feature("route")
+
+str(q)
+```
+```{r}
+ways <- osmdata_sf(q)
+
+
+```
+
+```{r}
+ways$osm_multilines
+```
+## Try to do it with the cycle API
+
+```{r}
+summary(world["lifeExp"])
+```
+
+
