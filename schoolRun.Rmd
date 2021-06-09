@@ -87,14 +87,32 @@ m
 ```
 
 
+Convert points to to SF object
+```{r}
+
+# Convert data frame to sf object
+alumnes_sf <-  st_as_sf(x = coordinates, 
+                        coords = c("long", "lat"),
+                        crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")
+
+escola_sf <- st_as_sf(x = escola, 
+                        coords = c("long", "lat"),
+                        crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")
+```
+
+
+```{r}
+colnames(alumnes_sf)
+```
+
+
+
 
 ### Maybe explore the graph way. Download ways and points,nodes and vertices and find shortest path.
 
+
 ```{r}
-available_features()
-```
-```{r}
-available_tags("route")
+available_tags("highway")
 ```
 
 
@@ -102,25 +120,53 @@ available_tags("route")
 ```{r}
 
 #building the query
-q <- getbb("L'Escala") %>%
-      opq()  %>%
-       add_osm_feature("route")
+carrers_lescala <- getbb("L'Escala") %>%
+       opq()  %>%
+       add_osm_feature(key="highway",value = c("residential", "living_street",
+                            "unclassified",
+                            "service", "footway", "cycleway"
+                  )) %>% #maybe filter and get only small streets?
+  osmdata_sf()
 
-str(q)
+
 ```
+
+
+
+
+```{r fig.width=10,fig.height=10}
+library(ggplot2)
+ggplot() +
+  geom_sf(data = carrers_lescala$osm_lines,
+          inherit.aes = FALSE,
+          color = "gray") +
+  geom_sf(data = alumnes_sf,inherit.aes = FALSE)+
+  geom_sf(data = escola_sf,inherit.aes = FALSE,color="violet")
+
+
+``` 
+
+
+
 ```{r}
+
 ways <- osmdata_sf(q)
 
-
 ```
 
+
+
 ```{r}
+
 ways$osm_multilines
+
 ```
 ## Try to do it with the cycle API
 
 ```{r}
+
 summary(world["lifeExp"])
+
 ```
 
 
