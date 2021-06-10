@@ -1,6 +1,10 @@
 ---
 title: "School Run l'Esculapi"
-output: html_document
+author: "Marc Deixt"
+date: '`r Sys.Date()`'
+output: 
+  html_document:
+    keep_md: true
 ---
 
 ```{r setup, include=FALSE}
@@ -12,6 +16,9 @@ library(stringr)
 library(leaflet)
 library(osmdata)
 library(sf)
+library(stplanr)
+library(igraph)
+library(dodgr)
 #library(ggmap)
 
 
@@ -45,9 +52,7 @@ adresses <- adresses %>%
 
 ```
 
-```{r}
-adresses
-```
+
 
 
 ## Geocoding
@@ -76,7 +81,7 @@ coordinates
 ```
 
 ```{r}
-icon <- makeIcon(iconUrl="pupil_icon.png",iconWidth = 28,iconHeight = 28)
+icon <- makeIcon(iconUrl="pupil_icon.png",iconWidth = 10,iconHeight = 10)
 sc_icon <-  makeIcon(iconUrl="school-icon.png",iconWidth = 35,iconHeight = 35)
 m <- leaflet() %>%
   addTiles() %>%  # Add default OpenStreetMap map tiles
@@ -102,7 +107,8 @@ escola_sf <- st_as_sf(x = escola,
 
 
 ```{r}
-colnames(alumnes_sf)
+escola_sf[1,"address"] <- "ESCOLA"
+alumnes_i_escola <- rbind(alumnes_sf,escola_sf)
 ```
 
 
@@ -146,27 +152,153 @@ ggplot() +
 
 ``` 
 
-
+Transform or convert coordinates of simple feature
 
 ```{r}
 
-ways <- osmdata_sf(q)
-
+carrers_sf <- carrers_lescala$osm_lines %>%
+  st_transform(crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") 
 ```
 
 
 
 ```{r}
-
-ways$osm_multilines
+# Create a matrix of touching streets
+touching_streets <- st_touches(carrers_sf, sparse = FALSE)
 
 ```
-## Try to do it with the cycle API
+
+Flipo que faci servir hclust per això. Mira-t'ho bé.
+
+```{r}
+# Merge all streets that touch each other converting all
+highways_hclust <- hclust(as.dist(!touching_streets), method = "single")
+# Cut the dendrogram at heigh 0.5 so that all touching 
+  # streets stay in the same group
+  highways_groups <- cutree(highways_hclust, h = 0.5)
+```
+
+
+
+```{r}
+table(highways_groups)
+```
+
+
+```{r}
+carrers_sf <- carrers_sf[highways_groups == 1, ]
+
+```
+
+
+```{r}
+#library(purrr)
+nearest_point <- alumnes_i_escola %>%
+  mutate(
+    index_of_nearest_feature = st_nearest_feature(., carrers_sf),
+    nearest_feature = st_geometry(carrers_sf[index_of_nearest_feature,]),
+    nearest_point = purrr::pmap(
+      list(geometry, nearest_feature),
+      ~ st_nearest_points(.x, .y) %>% st_cast("POINT") %>% magrittr::extract2(2)
+    )
+  ) %>%
+  pull(nearest_point) %>%
+  st_sfc(crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") 
+
+nearest_point
+```
+
+
+
+```{r}
+alumnes_i_escola_nearest_points <- alumnes_i_escola %>% 
+  st_drop_geometry() %>% 
+  st_as_sf(., geometry = nearest_point)
+alumnes_i_escola_nearest_points
+```
+
+```{r}
+library(ggplot2)
+ggplot() +
+  geom_sf(data = carrers_sf$geom,
+          inherit.aes = FALSE,
+          color = "gray") +
+  geom_sf(data = alumnes_i_escola_nearest_points,inherit.aes = FALSE)
+```
+
+
+```{r}
+carrers_sf <-carrers_sf[,"name"]
+rnet <- SpatialLinesNetwork(rnet_breakup_vertices(rnet = carrers_sf))
+
+```
+
 
 ```{r}
 
-summary(world["lifeExp"])
+nodes_origen <- stplanr::find_network_nodes(sln = rnet, x = coordinates$long, y = coordinates$lat)
+
+node_desti <- stplanr::find_network_nodes(sln = rnet, x = escola$long, y = escola$lat)
+```
+
+
+```{r}
+
+od_data = data.frame(start = nodes_origen, end = node_desti)
 
 ```
+
+```{r}
+
+rutes = sum_network_links(sln = rnet, routedata = od_data)
+rutes <- drop_na(rutes)
+
+ggplot() +
+  geom_sf(data = rutes$geometry,
+          inherit.aes = FALSE,
+          color = "gray") +
+  geom_sf(data = alumnes_i_escola_nearest_points,inherit.aes = FALSE)
+
+
+```
+
+
+```{r}
+m <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addPolygons(data=rutes$geometry) %>%
+  addMarkers(data = alumnes_i_escola_nearest_points, icon = icon) %>%
+  addMarkers(lng=escola$long, lat= escola$lat, icon = sc_icon)
+
+m
+
+```
+
+
+
+Busquem distàncies
+
+```{r}
+
+carrers_sf <- carrers_lescala$osm_lines %>%
+  st_transform(crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") 
+
+graph <- weight_streetnet (carrers_sf)
+head (graph)
+graph_first_comp<- (graph[graph$component==1,])
+grc <- dodgr_contract_graph (graph)
+```
+
+
+```{r}
+verts <- dodgr_vertices (graph)
+xy <- data.frame(x=coordinates$long,y=coordinates$lat)
+pts <- match_pts_to_graph (verts, xy)
+pts <- verts$id [pts]
+d <- dodgr_dists (graph, from = pts[1:(length(pts)-1)],to =pts[length(pts)] )
+summary(d)
+```
+
+
 
 
