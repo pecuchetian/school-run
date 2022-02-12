@@ -14,11 +14,13 @@ library(tidyr)
 library(tidygeocoder)
 library(stringr)
 library(leaflet)
+library(leaflet.extras)
 library(osmdata)
 library(sf)
 library(stplanr)
 library(igraph)
 library(dodgr)
+library(units)
 #library(ggmap)
 
 
@@ -57,15 +59,20 @@ adresses <- adresses %>%
 
 ## Geocoding
 
-```{r}
+```{r eval=FALSE}
 
 
 coordinates <- adresses %>%
   tidygeocoder::geocode(address,timeout= 5)
- 
+ saveRDS(coordinates,file="coordinates.Rda")
 
 ```
 
+```{r}
+
+coordinates <- readRDS("coordinates.Rda")
+coordinates
+```
 
 
 ```{r}
@@ -77,8 +84,13 @@ coordinates  <-
 
 escola <- coordinates[nrow(coordinates),]
 coordinates <- coordinates[1:nrow(coordinates),]
-coordinates
+
+
+
 ```
+
+
+
 
 ```{r}
 icon <- makeIcon(iconUrl="pupil_icon.png",iconWidth = 10,iconHeight = 10)
@@ -138,11 +150,21 @@ carrers_lescala <- getbb("L'Escala") %>%
 ```
 
 
+```{r}
+
+escola_sf_m_CRS <- st_transform(escola_sf, "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +no_defs")
+r15 <- set_units(1.8, km)
+esc_buffer <- st_buffer(escola_sf_m_CRS,r15)
+escola_sf <- st_transform(escola_sf_m_CRS,crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")
+```
 
 
 ```{r fig.width=10,fig.height=10}
 library(ggplot2)
+
+
 ggplot() +
+  geom_sf(data=esc_buffer, inherit.aes = FALSE,color="violet")+
   geom_sf(data = carrers_lescala$osm_lines,
           inherit.aes = FALSE,
           color = "gray") +
@@ -151,6 +173,18 @@ ggplot() +
 
 
 ``` 
+
+
+
+
+
+
+
+
+
+
+
+
 
 Transform or convert coordinates of simple feature
 
@@ -302,3 +336,47 @@ summary(d)
 
 
 
+
+```{r fig.width=7,fig.height=10,echo=FALSE,warning=FALSE}
+
+#això és important, splantr ens conserva el SF a @sl$geom i ens crea un graf a @g. el mètode edge_betweenness és responsable d'assignar els pesos segons la coincidència.
+ways_sln = SpatialLinesNetwork(rutes)
+e = igraph::edge_betweenness(ways_sln@g)
+
+ggplot() +
+  geom_sf(data = carrers_sf$geom,
+          inherit.aes = FALSE,
+          color = "gray", alpha= 0.4) +
+    geom_sf(data = ways_sln@sl$geometry,
+          inherit.aes = FALSE,
+          color = "violet",
+          size=e / 6000) +
+  geom_sf(data = alumnes_i_escola_nearest_points,inherit.aes = FALSE, alpha=0.2,size=0.5) +
+  geom_sf(data=escola_sf, inherit.aes = FALSE, color="blue")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+m <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addPolygons(data=ways_sln@sl$geometry, weight= e / 2000, color ="black") %>%
+  addMarkers(data = alumnes_i_escola_nearest_points, icon = icon) %>%
+  addMarkers(lng=escola$long, lat= escola$lat, icon = sc_icon) %>%
+  addFullscreenControl()
+
+m
+
+```
