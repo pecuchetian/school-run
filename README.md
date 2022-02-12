@@ -1,4 +1,5 @@
-<<<<<<< HEAD
+
+
 ---
 title: "School Run l'Esculapi"
 author: "Marc Deixt"
