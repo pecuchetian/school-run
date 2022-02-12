@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ---
 title: "School Run l'Esculapi"
 author: "Marc Deixt"
@@ -470,3 +471,8 @@ summary(d)
 
 
 
+=======
+# pecuchetian miscelania
+
+I'll post some miscellaneuous projects here.
+>>>>>>> 51278c156820f61d0976c93a8c6356e281f837f6
